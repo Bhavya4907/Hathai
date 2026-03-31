@@ -141,9 +141,21 @@ public class ChatClient extends Application {
 
     private void connectToServer() {
         try {
-            client = new ChatClientInternal(new URI("ws://localhost:8080"));
+            // These are the details Railway just gave you
+            String railwayDomain = "centerbeam.proxy.rlwy.net";
+            int railwayPort = 25610;
+
+            // Important: Keep the "ws://" prefix for WebSockets
+            URI serverUri = new URI("ws://" + railwayDomain + ":" + railwayPort);
+
+            client = new ChatClientInternal(serverUri);
             client.connect();
-        } catch (Exception e) { e.printStackTrace(); }
+
+            System.out.println("Connecting to Railway Server at: " + serverUri);
+        } catch (Exception e) {
+            System.err.println("Connection failed: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     class ChatClientInternal extends WebSocketClient {
