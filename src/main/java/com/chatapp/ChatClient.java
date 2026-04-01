@@ -5,7 +5,6 @@ import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
-import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
@@ -23,37 +22,24 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class ChatClient extends Application {
-
     private String username;
     private ChatClientInternal client;
-
-    // UI Components upgraded for Images
     private Map<String, VBox> chatHistories = new HashMap<>();
     private ScrollPane scrollPane = new ScrollPane();
-    private VBox currentChatContainer;
-
     private TextField messageField = new TextField();
-    private ListView<String> userSidebar = new ListView<>();
-    private ObservableList<String> activeUsers = FXCollections.observableArrayList();
+    private ObservableList<String> activeUsers = FXCollections.observableArrayList("Global");
     private String currentTarget = "Global";
 
     public ChatClient(String username) { this.username = username; }
-    public ChatClient() {}
+    public ChatClient() {} // Required for JavaFX launch
 
     @Override
-    public void start(Stage primaryStage) {
-        // --- 1. Sidebar ---
-        userSidebar.setItems(activeUsers);
-        activeUsers.add("Global");
-        userSidebar.getSelectionModel().selectedItemProperty().addListener((obs, old, newVal) -> {
-            if (newVal != null) switchChat(newVal);
+    public void start(Stage stage) {
+        ListView<String> userSidebar = new ListView<>(activeUsers);
+        userSidebar.getSelectionModel().selectedItemProperty().addListener((obs, old, val) -> {
+            if (val != null) switchChat(val);
         });
 
-        // --- 2. Chat Area Setup ---
-        scrollPane.setFitToWidth(true);
-        switchChat("Global"); // Initialize default chat
-
-        // --- 3. Input Area (Text + Image Button) ---
         Button attachBtn = new Button("📎");
         attachBtn.setOnAction(e -> sendImage());
 
@@ -61,7 +47,6 @@ public class ChatClient extends Application {
         HBox.setHgrow(messageField, Priority.ALWAYS);
         inputBar.setPadding(new Insets(10));
 
-        // --- 4. Layout ---
         BorderPane root = new BorderPane();
         root.setLeft(userSidebar);
         root.setCenter(scrollPane);
@@ -69,120 +54,90 @@ public class ChatClient extends Application {
 
         messageField.setOnAction(e -> sendMessage());
 
-        primaryStage.setTitle("HathaiM - " + username);
-        primaryStage.setScene(new Scene(root, 800, 600));
-        primaryStage.show();
-
-        connectToServer();
+        switchChat("Global");
+        stage.setScene(new Scene(root, 800, 500));
+        stage.setTitle("HathaiM - " + username);
+        stage.show();
+        connect();
     }
 
     private void switchChat(String target) {
         this.currentTarget = target;
         chatHistories.putIfAbsent(target, new VBox(10));
-        currentChatContainer = chatHistories.get(target);
-        scrollPane.setContent(currentChatContainer);
-    }
-
-    private void sendImage() {
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Images", "*.png", "*.jpg", "*.gif"));
-        File file = fileChooser.showOpenDialog(null);
-
-        if (file != null) {
-            try {
-                byte[] bytes = java.nio.file.Files.readAllBytes(file.toPath());
-                String base64 = Base64.getEncoder().encodeToString(bytes);
-
-                // Format: IMG:target:base64Data
-                client.send("IMG:" + currentTarget + ":" + base64);
-
-                displayImage(currentTarget, "You", new Image(file.toURI().toString()));
-            } catch (IOException e) { e.printStackTrace(); }
-        }
+        scrollPane.setContent(chatHistories.get(target));
     }
 
     private void sendMessage() {
-        String msg = messageField.getText().trim();
-        if (msg.isEmpty()) return;
-
+        String txt = messageField.getText().trim();
+        if (txt.isEmpty()) return;
         if (currentTarget.equals("Global")) {
-            client.send(msg);
+            client.send(txt);
         } else {
-            client.send("TO:" + currentTarget + ":" + msg);
-            displayText(currentTarget, "You: " + msg);
+            client.send("TO:" + currentTarget + ":" + txt);
+            displayText(currentTarget, "You: " + txt);
         }
         messageField.clear();
     }
 
+    private void sendImage() {
+        File file = new FileChooser().showOpenDialog(null);
+        if (file != null) {
+            try {
+                byte[] bytes = java.nio.file.Files.readAllBytes(file.toPath());
+                String base64 = Base64.getEncoder().encodeToString(bytes);
+                client.send("IMG:" + currentTarget + ":" + base64);
+                displayImage(currentTarget, "You", new Image(file.toURI().toString()));
+            } catch (Exception e) { e.printStackTrace(); }
+        }
+    }
+
     private void displayText(String target, String msg) {
         Platform.runLater(() -> {
-            chatHistories.putIfAbsent(target, new VBox(10));
-            Label label = new Label(msg);
-            label.setWrapText(true);
-            chatHistories.get(target).getChildren().add(label);
+            chatHistories.putIfAbsent(target, new VBox(5));
+            chatHistories.get(target).getChildren().add(new Label(msg));
             scrollPane.setVvalue(1.0);
         });
     }
 
     private void displayImage(String target, String sender, Image img) {
         Platform.runLater(() -> {
-            chatHistories.putIfAbsent(target, new VBox(10));
-            VBox container = chatHistories.get(target);
-
-            Label nameLabel = new Label(sender + " sent an image:");
+            chatHistories.putIfAbsent(target, new VBox(5));
             ImageView iv = new ImageView(img);
-            iv.setFitWidth(250);
-            iv.setPreserveRatio(true);
-
-            container.getChildren().addAll(nameLabel, iv);
+            iv.setFitWidth(200); iv.setPreserveRatio(true);
+            chatHistories.get(target).getChildren().addAll(new Label(sender + ":"), iv);
             scrollPane.setVvalue(1.0);
         });
     }
 
-    private void connectToServer() {
+    private void connect() {
         try {
-            // These are the details Railway just gave you
-            String railwayDomain = "centerbeam.proxy.rlwy.net";
-            int railwayPort = 25610;
-
-            // Important: Keep the "ws://" prefix for WebSockets
-            URI serverUri = new URI("ws://" + railwayDomain + ":" + railwayPort);
-
-            client = new ChatClientInternal(serverUri);
+            client = new ChatClientInternal(new URI("ws://centerbeam.proxy.rlwy.net:25610"));
             client.connect();
-
-            System.out.println("Connecting to Railway Server at: " + serverUri);
-        } catch (Exception e) {
-            System.err.println("Connection failed: " + e.getMessage());
-            e.printStackTrace();
-        }
+        } catch (Exception e) { e.printStackTrace(); }
     }
 
     class ChatClientInternal extends WebSocketClient {
         public ChatClientInternal(URI uri) { super(uri); }
-
+        @Override public void onOpen(ServerHandshake h) { send(username); }
         @Override
-        public void onOpen(ServerHandshake h) {
-            send(username);
-            displayText("Global", "Connected as " + username);
+        public void onMessage(String msg) {
+            Platform.runLater(() -> {
+                if (msg.startsWith("USERLIST_ADD:")) {
+                    String user = msg.split(":")[1];
+                    if (!activeUsers.contains(user) && !user.equals(username)) activeUsers.add(user);
+                } else if (msg.startsWith("MSG_GLOBAL:")) {
+                    String[] p = msg.split(":", 3);
+                    displayText("Global", p[1] + ": " + p[2]);
+                } else if (msg.startsWith("MSG_PRIVATE:")) {
+                    String[] p = msg.split(":", 3);
+                    displayText(p[1], p[1] + ": " + p[2]);
+                } else if (msg.startsWith("IMG_RCV:")) {
+                    String[] p = msg.split(":", 3);
+                    Image img = new Image(new ByteArrayInputStream(Base64.getDecoder().decode(p[2])));
+                    displayImage("Global", p[1], img);
+                }
+            });
         }
-
-        @Override
-        public void onMessage(String message) {
-            if (message.startsWith("IMG:")) {
-                String[] parts = message.split(":", 3);
-                String sender = parts[1];
-                byte[] data = Base64.getDecoder().decode(parts[2]);
-                Image img = new Image(new ByteArrayInputStream(data));
-
-                displayImage(sender.equals(username) ? currentTarget : sender, sender, img);
-                Platform.runLater(() -> { if(!activeUsers.contains(sender)) activeUsers.add(sender); });
-            } else {
-                // Regular text logic
-                displayText("Global", message);
-            }
-        }
-
         @Override public void onClose(int i, String s, boolean b) {}
         @Override public void onError(Exception e) {}
     }
