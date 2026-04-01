@@ -73,7 +73,7 @@
                         <configuration>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>com.chatapp.ChatServer</mainClass>
+                                    <mainClass>com.chatapp.Launcher</mainClass>
                                 </transformer>
                             </transformers>
                             <filters>
