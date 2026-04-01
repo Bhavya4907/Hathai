@@ -34,7 +34,7 @@
             <configuration>
               <transformers>
                 <transformer>
-                  <mainClass>com.chatapp.ChatServer</mainClass>
+                  <mainClass>com.chatapp.Launcher</mainClass>
                 </transformer>
               </transformers>
               <filters>
